@@ -1,15 +1,11 @@
 'use client';
 import React, { useState, useRef, use, useEffect } from 'react';
 import axios from 'axios';
-import WebRTCComponent from './WebRTC/webRTC';
+import { SimliClient } from './SimliClient/SimliClient';
 
 const simli_faceid = '5514e24d-6086-46a3-ace4-6a7264e5cb7c';
 const elevenlabs_voiceid = 'onwK4e9ZLuTAKqWW03F9';
 
-interface simliWebRTC {
-  start: () => void;
-  sendAudioData: (audioData: Uint8Array) => void;
-}
 
 const Demo = () => {
   const [inputText, setInputText] = useState('');
@@ -17,28 +13,42 @@ const Demo = () => {
   const [error, setError] = useState('');
   const [chatgptText, setChatgptText] = useState('');
   const [startWebRTC, setStartWebRTC] = useState(false);
-  const webRTC = useRef<simliWebRTC>(null);
   const audioContext = useRef<AudioContext | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const simliClientRef = useRef<SimliClient | null>(null);
 
   useEffect(() => {
+    if (videoRef.current && audioRef.current) {
+      const simliClient = new SimliClient(process.env.NEXT_PUBLIC_SIMLI_API_KEY, simli_faceid, true, videoRef, audioRef);
+      simliClientRef.current = simliClient;
+      console.log('Simli Client initialized');
+    };
+
+    return () => {
+      if (simliClientRef.current) {
+        simliClientRef.current?.close();
+      };
+    };
+  },[videoRef, audioRef, simliClientRef]);
+
+  const handleStart = () => {
+    // Step 1: Start WebRTC
+    simliClientRef.current?.start();
+    setStartWebRTC(true);
+
+    setTimeout(() => {
+      // Step 2: Send empty audio data to WebRTC to start rendering
+      const audioData = new Uint8Array(6000).fill(0);
+      simliClientRef.current?.sendAudioData(audioData);
+    }, 4000);
+    
     audioContext.current = new (window.AudioContext || (window as any).webkitAudioContext)();
     return () => {
       if (audioContext.current) {
         audioContext.current.close();
       }
     };
-  }, []);
-
-  const handleStart = () => {
-    // Step 1: Start WebRTC
-    webRTC.current?.start();
-
-    setTimeout(() => {
-      // Step 2: Send empty audio data to WebRTC to start rendering
-      const audioData = new Uint8Array(6000).fill(0);
-      webRTC.current?.sendAudioData(audioData);
-      setStartWebRTC(true);
-    }, 4000);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -90,7 +100,7 @@ const Demo = () => {
       const chunkSize = 6000;
       for (let i = 0; i < pcm16Data.length; i += chunkSize) {
         const chunk = pcm16Data.slice(i, i + chunkSize);
-        webRTC.current?.sendAudioData(chunk);
+        simliClientRef.current?.sendAudioData(chunk);
       }
     } catch (err) {
       setError('An error occurred. Please try again.');
@@ -103,7 +113,11 @@ const Demo = () => {
   return (
     <div className="bg-black w-full h-svh flex flex-col justify-center items-center font-mono text-white">
       <div className="w-[512px] h-svh flex flex-col justify-center items-center gap-4">
-        <WebRTCComponent ref={webRTC} faceID={simli_faceid} />
+        {/* Simli Client Renderer */}
+        <div className="relative w-full aspect-video">
+          <video ref={videoRef} id="simli_video" autoPlay playsInline className="w-full h-full object-cover"></video>
+          <audio ref={audioRef} id="simli_audio" autoPlay ></audio>
+        </div>
         {startWebRTC ? (
           <>
             {chatgptText && <p>{chatgptText}</p>}
