@@ -2,7 +2,7 @@
  A simple Simli WebRTC AI Agent demo with OpenAI for LLM and ElevnLabs for speech
 
  ## Try Demo
- 1. Add your keys to .env
+ 1. Rename .env.local to .env and paste your API keys
 ```js
 NEXT_PUBLIC_SIMLI_API_KEY= YOUR-SIMLI-KEY
 NEXT_PUBLIC_OPENAI_API_KEY= YOUR-OPENAI-KEY
