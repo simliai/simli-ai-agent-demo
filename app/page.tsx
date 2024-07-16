@@ -1,11 +1,12 @@
 'use client';
 import React, { useState, useRef, use, useEffect } from 'react';
 import axios from 'axios';
-import { SimliClient } from './SimliClient/SimliClient';
+import { SimliClient, SimliClientConfig } from './SimliClient/SimliClient';
 
 const simli_faceid = '5514e24d-6086-46a3-ace4-6a7264e5cb7c';
 const elevenlabs_voiceid = 'onwK4e9ZLuTAKqWW03F9';
 
+const simliClient = new SimliClient();
 
 const Demo = () => {
   const [inputText, setInputText] = useState('');
@@ -16,31 +17,38 @@ const Demo = () => {
   const audioContext = useRef<AudioContext | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
-  const simliClientRef = useRef<SimliClient | null>(null);
 
   useEffect(() => {
     if (videoRef.current && audioRef.current) {
-      const simliClient = new SimliClient(process.env.NEXT_PUBLIC_SIMLI_API_KEY, simli_faceid, true, videoRef, audioRef);
-      simliClientRef.current = simliClient;
+
+      // Step 0: Initialize Simli Client
+      const SimliConfig = {
+        apiKey: process.env.NEXT_PUBLIC_SIMLI_API_KEY,
+        faceID: simli_faceid,
+        handleSilence: true,
+        videoRef: videoRef,
+        audioRef: audioRef,
+      };
+
+      simliClient.Initialize(SimliConfig);
+
       console.log('Simli Client initialized');
     };
 
     return () => {
-      if (simliClientRef.current) {
-        simliClientRef.current?.close();
-      };
+      simliClient.close();
     };
-  },[videoRef, audioRef, simliClientRef]);
+  },[videoRef, audioRef]);
 
   const handleStart = () => {
     // Step 1: Start WebRTC
-    simliClientRef.current?.start();
+    simliClient.start();
     setStartWebRTC(true);
 
     setTimeout(() => {
       // Step 2: Send empty audio data to WebRTC to start rendering
       const audioData = new Uint8Array(6000).fill(0);
-      simliClientRef.current?.sendAudioData(audioData);
+      simliClient.sendAudioData(audioData);
     }, 4000);
     
     audioContext.current = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -100,7 +108,7 @@ const Demo = () => {
       const chunkSize = 6000;
       for (let i = 0; i < pcm16Data.length; i += chunkSize) {
         const chunk = pcm16Data.slice(i, i + chunkSize);
-        simliClientRef.current?.sendAudioData(chunk);
+        simliClient.sendAudioData(chunk);
       }
     } catch (err) {
       setError('An error occurred. Please try again.');
