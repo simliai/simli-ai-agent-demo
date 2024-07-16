@@ -172,6 +172,12 @@ const WebRTCComponent = forwardRef(({ faceID = 'tmp9i8bbq7c' }: Props, ref) => {
         console.log('Creating a new peer connection');
         const newPc = await createPeerConnection();
 
+        let time_start: number | null = null;
+
+        const current_stamp = () => {
+          // Calculate elapsed time
+        };
+
         // Create a data channel
         const parameters = JSON.parse('{"ordered": true}');
         const newDc = newPc.createDataChannel('chat', parameters);

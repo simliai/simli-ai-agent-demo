@@ -11,7 +11,7 @@ interface simliWebRTC {
   sendAudioData: (audioData: Uint8Array) => void;
 }
 
-const AITextToSpeech = () => {
+const Demo = () => {
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -101,31 +101,34 @@ const AITextToSpeech = () => {
   };
 
   return (
-    <div className=' bg-slate-900 w-full h-svh flex flex-col justify-center items-center'>
+    <div className="bg-black w-full h-svh flex flex-col justify-center items-center font-mono text-white">
       <div className="w-[512px] h-svh flex flex-col justify-center items-center gap-4">
         <WebRTCComponent ref={webRTC} faceID={simli_faceid} />
         {startWebRTC ? (
           <>
-            {chatgptText && <p className="text-white">{chatgptText}</p>}
+            {chatgptText && <p>{chatgptText}</p>}
             <form onSubmit={handleSubmit} className="space-y-4 w-full">
               <input
                 type="text"
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
                 placeholder="Enter your message"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-black focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-white bg-black text-white focus:outline-none focus:ring-2 focus:ring-white"
               />
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
+                className="w-full bg-white text-black py-2 px-4 hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-black disabled:opacity-50"
               >
                 {isLoading ? 'Processing...' : 'Send'}
               </button>
             </form>
           </>
         ) : (
-          <button onClick={handleStart} className="w-full bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+          <button
+            onClick={handleStart}
+            className="w-full bg-white text-black py-2 px-4 hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-black"
+          >
             Start WebRTC
           </button>
         )}
@@ -135,4 +138,4 @@ const AITextToSpeech = () => {
   );
 };
 
-export default AITextToSpeech;
+export default Demo;
