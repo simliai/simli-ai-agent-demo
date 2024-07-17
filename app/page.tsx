@@ -1,7 +1,7 @@
 'use client';
 import React, { useState, useRef, use, useEffect } from 'react';
 import axios from 'axios';
-import { SimliClient, SimliClientConfig } from './SimliClient/SimliClient';
+import { SimliClient } from 'simli-client';
 
 const simli_faceid = '5514e24d-6086-46a3-ace4-6a7264e5cb7c';
 const elevenlabs_voiceid = 'onwK4e9ZLuTAKqWW03F9';
