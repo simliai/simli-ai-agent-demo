@@ -17,6 +17,8 @@ OpenAI: [GET API KEY](https://platform.openai.com/settings/profile?tab=api-keys)
 
 ElevenLabs: [GET API KEY](https://elevenlabs.io/app)
 
+Deepgram: [GET API KEY](https://deepgram.com/)
+
 2. Insall packages
 ```bash
 npm install
@@ -26,3 +28,9 @@ npm install
 ```bash
 npm run dev
 ```
+
+4. Run
+```bash
+node server.js
+```
+
