@@ -31,11 +31,11 @@ let audioQueue = [];
 async function promptLLM(ws, prompt) {
     try {
       const stream = await openai.chat.completions.create({
-        model: 'gpt-3.5-turbo',
+        model: 'gpt-4o-mini',
         messages: [
           {
             role: 'assistant',
-            content: `You are Nikola Tesla. You are from Ireland and have an Irish accent. You love to brag about all your inventions. You talk about how Elon Musk does not even hold a candle to your brilliance.`
+            content: `You are Nikola Tesla. You are from Ireland and have an Irish accent. You love to brag about all your inventions. You talk about how Elon Musk does not even hold a candle to your brilliance. You speak quite curtly.`
           },
           {
             role: 'user',
@@ -46,72 +46,84 @@ async function promptLLM(ws, prompt) {
       });
   
       let fullResponse = '';
+      let elevenLabsWs = null;
+  
       for await (const chunk of stream) {
         const chunkMessage = chunk.choices[0]?.delta?.content || '';
         fullResponse += chunkMessage;
+  
         // Send the chunk to the client for real-time display
         ws.send(JSON.stringify({ type: 'text', content: chunkMessage }));
+  
+        // Start ElevenLabs streaming if it hasn't started yet
+        if (!elevenLabsWs && fullResponse.length > 0) {
+          elevenLabsWs = await startElevenLabsStreaming(ws);
+        }
+  
+        // Send chunk to ElevenLabs if streaming has started
+        if (elevenLabsWs && chunkMessage) {
+          const contentMessage = {
+            text: chunkMessage,
+            try_trigger_generation: true,
+          };
+          elevenLabsWs.send(JSON.stringify(contentMessage));
+        }
       }
   
-      // After collecting the full response, send it to ElevenLabs
-      await convertToSpeech(ws, fullResponse);
+      // Close ElevenLabs streaming
+      if (elevenLabsWs) {
+        elevenLabsWs.send(JSON.stringify({ text: "", try_trigger_generation: true }));
+      }
+  
     } catch (error) {
       console.error("Error in promptLLM:", error);
     }
   }
-
-async function convertToSpeech(ws, text) {
-  return new Promise((resolve, reject) => {
-    const elevenLabsWs = new WebSocket(`wss://api.elevenlabs.io/v1/text-to-speech/${elevenlabs_voiceid}/stream-input?model_id=eleven_multilingual_v1&output_format=pcm_16000`);
-
-    elevenLabsWs.on('open', () => {
-      console.log('Connected to ElevenLabs WebSocket');
-      
-      // Send the initial message with audio settings
-      const initialMessage = {
-        text: " ", // Empty text to initialize the stream
-        voice_settings: {
-          stability: 0.5,
-          similarity_boost: 0.5
-        },
-        xi_api_key: process.env.NEXT_PUBLIC_ELEVENLABS_API_KEY,
-      };
-
-      elevenLabsWs.send(JSON.stringify(initialMessage));
-
-      // Send the actual text content
-      const contentMessage = {
-        text: text,
-        try_trigger_generation: true,
-      };
-
-      elevenLabsWs.send(JSON.stringify(contentMessage));
+  
+  async function startElevenLabsStreaming(ws) {
+    return new Promise((resolve, reject) => {
+      const elevenLabsWs = new WebSocket(`wss://api.elevenlabs.io/v1/text-to-speech/${elevenlabs_voiceid}/stream-input?model_id=eleven_multilingual_v1&output_format=pcm_16000`);
+  
+      elevenLabsWs.on('open', () => {
+        console.log('Connected to ElevenLabs WebSocket');
+        
+        // Send the initial message with audio settings
+        const initialMessage = {
+          text: " ", // Empty text to initialize the stream
+          voice_settings: {
+            stability: 0.5,
+            similarity_boost: 0.5
+          },
+          xi_api_key: process.env.NEXT_PUBLIC_ELEVENLABS_API_KEY,
+        };
+  
+        elevenLabsWs.send(JSON.stringify(initialMessage));
+        resolve(elevenLabsWs);
+      });
+  
+      elevenLabsWs.on('message', (data) => {
+        const message = JSON.parse(data);
+        if (message.audio) {
+          // Decode base64 audio data
+          const audioData = Buffer.from(message.audio, 'base64');
+          // Send audio chunk to client
+          ws.send(audioData);
+        } else if (message.isFinal) {
+          console.log('ElevenLabs streaming completed');
+          elevenLabsWs.close();
+        }
+      });
+  
+      elevenLabsWs.on('error', (error) => {
+        console.error('ElevenLabs WebSocket error:', error);
+        reject(error);
+      });
+  
+      elevenLabsWs.on('close', () => {
+        console.log('ElevenLabs WebSocket closed');
+      });
     });
-
-    elevenLabsWs.on('message', (data) => {
-      const message = JSON.parse(data);
-      if (message.audio) {
-        // Decode base64 audio data
-        const audioData = Buffer.from(message.audio, 'base64');
-        // Send audio chunk to client
-        ws.send(audioData);
-      } else if (message.isFinal) {
-        console.log('ElevenLabs streaming completed');
-        elevenLabsWs.close();
-        resolve();
-      }
-    });
-
-    elevenLabsWs.on('error', (error) => {
-      console.error('ElevenLabs WebSocket error:', error);
-      reject(error);
-    });
-
-    elevenLabsWs.on('close', () => {
-      console.log('ElevenLabs WebSocket closed');
-    });
-  });
-}
+  }
   
   
 
