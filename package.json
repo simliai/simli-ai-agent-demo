@@ -3,16 +3,27 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -p 3005",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"
   },
   "dependencies": {
+    "@deepgram/sdk": "^3.5.1",
     "axios": "^1.7.2",
+    "cors": "^2.8.5",
+    "cross-fetch": "^4.0.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "microphone-stream": "^6.0.1",
     "next": "14.2.5",
+    "node-microphone": "^0.1.6",
+    "node-record-lpcm16": "^1.0.1",
+    "openai": "^4.54.0",
     "react": "^18",
-    "react-dom": "^18"
+    "react-dom": "^18",
+    "simli-client": "^1.0.0",
+    "ws": "^8.18.0"
   },
   "devDependencies": {
     "@types/node": "^20",

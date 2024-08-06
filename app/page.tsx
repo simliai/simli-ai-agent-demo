@@ -1,119 +1,160 @@
 'use client';
-import React, { useState, useRef, use, useEffect } from 'react';
-import axios from 'axios';
-import { SimliClient } from './SimliClient/SimliClient';
+import React, { useState, useRef, useEffect } from 'react';
+import { SimliClient } from 'simli-client';
 
 const simli_faceid = '5514e24d-6086-46a3-ace4-6a7264e5cb7c';
-const elevenlabs_voiceid = 'onwK4e9ZLuTAKqWW03F9';
-
 
 const Demo = () => {
-  const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [chatgptText, setChatgptText] = useState('');
   const [startWebRTC, setStartWebRTC] = useState(false);
-  const audioContext = useRef<AudioContext | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
+  const socketRef = useRef<WebSocket | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const simliClientRef = useRef<SimliClient | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const sourceNodeRef = useRef<AudioBufferSourceNode | null>(null);
+  const accumulatedBuffersRef = useRef<Float32Array[]>([]);
 
   useEffect(() => {
     if (videoRef.current && audioRef.current) {
-      const simliClient = new SimliClient(process.env.NEXT_PUBLIC_SIMLI_API_KEY, simli_faceid, true, videoRef, audioRef);
-      simliClientRef.current = simliClient;
+      // Initialize Simli Client
+      const SimliConfig = {
+        apiKey: process.env.NEXT_PUBLIC_SIMLI_API_KEY,
+        faceID: simli_faceid,
+        handleSilence: true,
+        videoRef: videoRef,
+        audioRef: audioRef,
+      };
+  
+      simliClientRef.current = new SimliClient();
+      simliClientRef.current.Initialize(SimliConfig);
       console.log('Simli Client initialized');
+  
+      // Initialize WebSocket connection
+      socketRef.current = new WebSocket('ws://localhost:8080');
+  
+      socketRef.current.onopen = () => {
+        console.log('Connected to server');
+      };
+  
+      socketRef.current.onmessage = (event) => {
+        if (event.data instanceof Blob) {
+          // Handle audio data from server
+          event.data.arrayBuffer().then((arrayBuffer) => {
+            const uint8Array = new Uint8Array(arrayBuffer);
+            simliClientRef.current?.sendAudioData(uint8Array);
+          });
+        } else {
+          // Handle text messages from server
+          try {
+            const message = JSON.parse(event.data);
+            if (message.type === 'text') {
+              setChatgptText(prev => prev + message.content);
+            }
+          } catch (error) {
+            console.error('Error parsing message:', error);
+          }
+        }
+      };
+  
+      socketRef.current.onerror = (error) => {
+        console.error('WebSocket error:', error);
+        setError('WebSocket connection error. Please check if the server is running.');
+      };
+    }
+  
+    return () => {
+      if (socketRef.current) {
+        socketRef.current.close();
+      }
+      if (simliClientRef.current) {
+        simliClientRef.current.close();
+      }
+    };
+  }, []);
+
+  const playAccumulatedBuffers = () => {
+    if (!audioContextRef.current || accumulatedBuffersRef.current.length === 0) return;
+
+    const totalLength = accumulatedBuffersRef.current.reduce((acc, buffer) => acc + buffer.length, 0);
+    const combinedBuffer = audioContextRef.current.createBuffer(1, totalLength, audioContextRef.current.sampleRate);
+    const channelData = combinedBuffer.getChannelData(0);
+
+    let offset = 0;
+    for (const buffer of accumulatedBuffersRef.current) {
+      channelData.set(buffer, offset);
+      offset += buffer.length;
+    }
+
+    sourceNodeRef.current = audioContextRef.current.createBufferSource();
+    sourceNodeRef.current.buffer = combinedBuffer;
+    sourceNodeRef.current.connect(audioContextRef.current.destination);
+    sourceNodeRef.current.start();
+
+    sourceNodeRef.current.onended = () => {
+      accumulatedBuffersRef.current = [];
+      playAccumulatedBuffers();
     };
 
-    return () => {
-      if (simliClientRef.current) {
-        simliClientRef.current?.close();
-      };
-    };
-  },[videoRef, audioRef, simliClientRef]);
+    // Send audio data to Simli Client
+    const int16Data = new Int16Array(channelData.length);
+    for (let i = 0; i < channelData.length; i++) {
+      int16Data[i] = Math.max(-32768, Math.min(32767, Math.floor(channelData[i] * 32768)));
+    }
+    simliClientRef.current?.sendAudioData(new Uint8Array(int16Data.buffer));
+  };
 
   const handleStart = () => {
-    // Step 1: Start WebRTC
     simliClientRef.current?.start();
     setStartWebRTC(true);
 
     setTimeout(() => {
-      // Step 2: Send empty audio data to WebRTC to start rendering
       const audioData = new Uint8Array(6000).fill(0);
       simliClientRef.current?.sendAudioData(audioData);
     }, 4000);
-    
-    audioContext.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-    return () => {
-      if (audioContext.current) {
-        audioContext.current.close();
-      }
-    };
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setInputText('');
-    setIsLoading(true);
-    setError('');
-
+  const startRecording = async () => {
+    console.log('Starting recording...');
     try {
-      // Step 3: Send text to OpenAI ChatGPT
-      const chatGPTResponse = await axios.post(
-        'https://api.openai.com/v1/chat/completions',
-        {
-          model: 'gpt-3.5-turbo',
-          messages: [{ role: 'user', content: inputText }],
-        },
-        {
-          headers: {
-            'Authorization': `Bearer ${process.env.NEXT_PUBLIC_OPENAI_API_KEY}`,
-            'Content-Type': 'application/json',
-          },
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0 && socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+          socketRef.current.send(event.data);
         }
-      );
+      };
 
-      const chatGPTText = chatGPTResponse.data.choices[0].message.content;
-      setChatgptText(chatGPTText);
+      mediaRecorder.start(250); // Collect 250ms of audio data at a time
 
-      // Step 4: Convert ChatGPT response to speech using ElevenLabs API
-      const elevenlabsResponse = await axios.post(
-        `https://api.elevenlabs.io/v1/text-to-speech/${elevenlabs_voiceid}?output_format=pcm_16000`,
-        {
-          text: chatGPTText,
-          model_id: 'eleven_multilingual_v1'
-        },
-        {
-          headers: {
-            'xi-api-key': `${process.env.NEXT_PUBLIC_ELEVENLABS_API_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          responseType: 'arraybuffer',
-        }
-      );
-
-      // Step 5: Convert audio to Uint8Array (Make sure its of type PCM16)
-      const pcm16Data = new Uint8Array(elevenlabsResponse.data);
-      console.log(pcm16Data);
-
-      // Step 6: Send audio data to WebRTC as 6000 byte chunks
-      const chunkSize = 6000;
-      for (let i = 0; i < pcm16Data.length; i += chunkSize) {
-        const chunk = pcm16Data.slice(i, i + chunkSize);
-        simliClientRef.current?.sendAudioData(chunk);
-      }
+      setIsRecording(true);
+      console.log('Recording started');
     } catch (err) {
-      setError('An error occurred. Please try again.');
-      console.error(err);
-    } finally {
-      setIsLoading(false);
+      console.error('Error accessing microphone:', err);
+      setError('Error accessing microphone. Please check your permissions.');
     }
+  };
+
+  const stopRecording = () => {
+    console.log('Stopping recording...');
+    if (mediaRecorderRef.current) {
+      mediaRecorderRef.current.stop();
+      mediaRecorderRef.current = null;
+    }
+    setIsRecording(false);
+    console.log('Recording stopped');
   };
 
   return (
     <div className="bg-black w-full h-svh flex flex-col justify-center items-center font-mono text-white">
       <div className="w-[512px] h-svh flex flex-col justify-center items-center gap-4">
-        {/* Simli Client Renderer */}
         <div className="relative w-full aspect-video">
           <video ref={videoRef} id="simli_video" autoPlay playsInline className="w-full h-full object-cover"></video>
           <audio ref={audioRef} id="simli_audio" autoPlay ></audio>
@@ -121,22 +162,16 @@ const Demo = () => {
         {startWebRTC ? (
           <>
             {chatgptText && <p>{chatgptText}</p>}
-            <form onSubmit={handleSubmit} className="space-y-4 w-full">
-              <input
-                type="text"
-                value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
-                placeholder="Enter your message"
-                className="w-full px-3 py-2 border border-white bg-black text-white focus:outline-none focus:ring-2 focus:ring-white"
-              />
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="w-full bg-white text-black py-2 px-4 hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-black disabled:opacity-50"
-              >
-                {isLoading ? 'Processing...' : 'Send'}
-              </button>
-            </form>
+            <button
+              onMouseDown={startRecording}
+              onMouseUp={stopRecording}
+              onTouchStart={startRecording}
+              onTouchEnd={stopRecording}
+              disabled={isLoading}
+              className="w-full bg-white text-black py-2 px-4 hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-black disabled:opacity-50"
+            >
+              {isRecording ? 'Recording...' : (isLoading ? 'Processing...' : 'Push to Speak')}
+            </button>
           </>
         ) : (
           <button
