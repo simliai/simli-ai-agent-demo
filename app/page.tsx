@@ -18,6 +18,7 @@ const Demo = () => {
   const audioContextRef = useRef<AudioContext | null>(null);
   const sourceNodeRef = useRef<AudioBufferSourceNode | null>(null);
   const accumulatedBuffersRef = useRef<Float32Array[]>([]);
+  const textAreaRef = useRef(null);
 
   useEffect(() => {
     if (videoRef.current && audioRef.current) {
@@ -63,7 +64,7 @@ const Demo = () => {
   
       socketRef.current.onerror = (error) => {
         console.error('WebSocket error:', error);
-        setError('WebSocket connection error. Please check if the server is running.');
+        // setError('WebSocket connection error. Please check if the server is running.');
       };
     }
   
@@ -76,6 +77,13 @@ const Demo = () => {
       }
     };
   }, []);
+
+  useEffect(() => {
+    // Scroll to the bottom of the text area when new text is added
+    if (textAreaRef.current) {
+      textAreaRef.current.scrollTop = textAreaRef.current.scrollHeight;
+    }
+  }, [chatgptText]);
 
   const playAccumulatedBuffers = () => {
     if (!audioContextRef.current || accumulatedBuffersRef.current.length === 0) return;
@@ -152,7 +160,7 @@ const Demo = () => {
     console.log('Recording stopped');
   };
 
-  return (
+return (
     <div className="bg-black w-full h-svh flex flex-col justify-center items-center font-mono text-white">
       <div className="w-[512px] h-svh flex flex-col justify-center items-center gap-4">
         <div className="relative w-full aspect-video">
@@ -161,7 +169,12 @@ const Demo = () => {
         </div>
         {startWebRTC ? (
           <>
-            {chatgptText && <p>{chatgptText}</p>}
+            <div 
+              ref={textAreaRef}
+              className="w-full h-32 bg-black-800 text-white p-2 overflow-y-auto"
+            >
+              {chatgptText}
+            </div>
             <button
               onMouseDown={startRecording}
               onMouseUp={stopRecording}
