@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { SimliClient } from 'simli-client';
 
-const simli_faceid = '5514e24d-6086-46a3-ace4-6a7264e5cb7c';
+const simli_faceid = '59da7c39-3de9-493b-b6e8-c53906f30ae0';
 
 const Demo = () => {
   const [isLoading, setIsLoading] = useState(false);
@@ -132,7 +132,7 @@ const Demo = () => {
         }
       };
 
-      mediaRecorder.start(250); // Collect 250ms of audio data at a time
+      mediaRecorder.start(100); // Collect 250ms of audio data at a time
 
       setIsRecording(true);
       console.log('Recording started');

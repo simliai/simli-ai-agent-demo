@@ -15,117 +15,128 @@ const { createClient, LiveTranscriptionEvents } = require("@deepgram/sdk");
 const deepgramClient = createClient(process.env.NEXT_PUBLIC_DEEPGRAM_API_KEY);
 let keepAlive;
 
-const OpenAI = require('openai');
-const openai = new OpenAI({
-    apiKey: process.env.NEXT_PUBLIC_OPENAI_API_KEY,
-});
+const Groq = require('groq-sdk');
+const groq = new Groq(process.env.GROQ_API_KEY);
 
-const elevenlabs_voiceid = 'onwK4e9ZLuTAKqWW03F9';
+const elevenlabs_voiceid = 'JlzYwOXWcqZ7RCVOjgKn';
 
 console.log("Deepgram API key:", process.env.NEXT_PUBLIC_DEEPGRAM_API_KEY ? "Set" : "Not set");
-console.log("OpenAI API key:", process.env.NEXT_PUBLIC_OPENAI_API_KEY ? "Set" : "Not set");
+console.log("Groq API key:", process.env.GROQ_API_KEY ? "Set" : "Not set");
 console.log("ElevenLabs API key:", process.env.NEXT_PUBLIC_ELEVENLABS_API_KEY ? "Set" : "Not set");
 
 let audioQueue = [];
 
 async function promptLLM(ws, prompt) {
-    try {
-      const stream = await openai.chat.completions.create({
-        model: 'gpt-4o-mini',
-        messages: [
-          {
-            role: 'assistant',
-            content: `You are interviewing me for a gardening role at buckingham palace. You are a condescending british gentleman and you dont think people are generally any good. You speak quite curtly.`
-          },
-          {
-            role: 'user',
-            content: prompt
-          }
-        ],
-        stream: true,
-      });
-  
-      let fullResponse = '';
-      let elevenLabsWs = null;
-  
-      for await (const chunk of stream) {
-        const chunkMessage = chunk.choices[0]?.delta?.content || '';
-        fullResponse += chunkMessage;
-  
-        // Send the chunk to the client for real-time display
-        ws.send(JSON.stringify({ type: 'text', content: chunkMessage }));
-  
-        // Start ElevenLabs streaming if it hasn't started yet
-        if (!elevenLabsWs && fullResponse.length > 0) {
-          elevenLabsWs = await startElevenLabsStreaming(ws);
+  try {
+    const chatCompletion = await groq.chat.completions.create({
+      messages: [
+        {
+          role: 'assistant',
+          content: `You are Boromir from Lord of the rings, and someone from the real world is calling you to talk to you about something, you start each response with "One does not simply..." and you are edgy and humerous. Your responses are not too lengthy, not verbose.`
+        },
+        {
+          role: 'user',
+          content: prompt
         }
-  
-        // Send chunk to ElevenLabs if streaming has started
-        if (elevenLabsWs && chunkMessage) {
-          const contentMessage = {
-            text: chunkMessage,
-            try_trigger_generation: true,
-          };
-          elevenLabsWs.send(JSON.stringify(contentMessage));
-        }
-      }
-  
-      // Close ElevenLabs streaming
-      if (elevenLabsWs) {
-        elevenLabsWs.send(JSON.stringify({ text: "", try_trigger_generation: true }));
-      }
-  
-    } catch (error) {
-      console.error("Error in promptLLM:", error);
-    }
-  }
-  
-  async function startElevenLabsStreaming(ws) {
-    return new Promise((resolve, reject) => {
-      const elevenLabsWs = new WebSocket(`wss://api.elevenlabs.io/v1/text-to-speech/${elevenlabs_voiceid}/stream-input?model_id=eleven_multilingual_v1&output_format=pcm_16000`);
-  
-      elevenLabsWs.on('open', () => {
-        console.log('Connected to ElevenLabs WebSocket');
-        
-        // Send the initial message with audio settings
-        const initialMessage = {
-          text: " ", // Empty text to initialize the stream
-          voice_settings: {
-            stability: 0.5,
-            similarity_boost: 0.5
-          },
-          xi_api_key: process.env.NEXT_PUBLIC_ELEVENLABS_API_KEY,
-        };
-  
-        elevenLabsWs.send(JSON.stringify(initialMessage));
-        resolve(elevenLabsWs);
-      });
-  
-      elevenLabsWs.on('message', (data) => {
-        const message = JSON.parse(data);
-        if (message.audio) {
-          // Decode base64 audio data
-          const audioData = Buffer.from(message.audio, 'base64');
-          // Send audio chunk to client
-          ws.send(audioData);
-        } else if (message.isFinal) {
-          console.log('ElevenLabs streaming completed');
-          elevenLabsWs.close();
-        }
-      });
-  
-      elevenLabsWs.on('error', (error) => {
-        console.error('ElevenLabs WebSocket error:', error);
-        reject(error);
-      });
-  
-      elevenLabsWs.on('close', () => {
-        console.log('ElevenLabs WebSocket closed');
-      });
+      ],
+      model: "llama3-8b-8192",
+      temperature: 1,
+      max_tokens: 512,
+      top_p: 1,
+      stream: true,
+      stop: null
     });
+
+    let fullResponse = '';
+    let elevenLabsWs = null;
+
+    for await (const chunk of chatCompletion) {
+      const chunkMessage = chunk.choices[0]?.delta?.content || '';
+      fullResponse += chunkMessage;
+
+      // Send the chunk to the client for real-time display
+      ws.send(JSON.stringify({ type: 'text', content: chunkMessage }));
+
+      // Start ElevenLabs streaming if it hasn't started yet
+      if (!elevenLabsWs && fullResponse.length > 0) {
+        elevenLabsWs = await startElevenLabsStreaming(ws);
+      }
+
+      // Send chunk to ElevenLabs if streaming has started
+      if (elevenLabsWs && chunkMessage) {
+        const contentMessage = {
+          text: chunkMessage,
+          try_trigger_generation: true,
+        };
+        elevenLabsWs.send(JSON.stringify(contentMessage));
+      }
+    }
+
+    // Close ElevenLabs streaming
+    if (elevenLabsWs) {
+      elevenLabsWs.send(JSON.stringify({ text: "", try_trigger_generation: true }));
+    }
+
+  } catch (error) {
+    console.error("Error in promptLLM:", error);
   }
-  
-  
+}
+
+async function startElevenLabsStreaming(ws) {
+  return new Promise((resolve, reject) => {
+    const elevenLabsWs = new WebSocket(`wss://api.elevenlabs.io/v1/text-to-speech/${elevenlabs_voiceid}/stream-input?model_id=eleven_turbo_v2_5&output_format=pcm_16000`);
+
+    elevenLabsWs.on('open', () => {
+      console.log('Connected to ElevenLabs WebSocket');
+      
+      // Send the initial message with audio settings
+      const initialMessage = {
+        text: " ", // Empty text to initialize the stream
+        voice_settings: {
+          stability: 0.5,
+          similarity_boost: 0.5
+        },
+        xi_api_key: process.env.NEXT_PUBLIC_ELEVENLABS_API_KEY,
+      };
+
+      elevenLabsWs.send(JSON.stringify(initialMessage));
+      resolve(elevenLabsWs);
+    });
+
+    elevenLabsWs.on('message', (data) => {
+      const message = JSON.parse(data);
+      if (message.audio) {
+        // Log the size of the chunk in bytes
+        console.log('ElevenLabs audio chunk size:', message.audio.length);
+        
+        // Decode base64 audio data
+        const audioData = Buffer.from(message.audio, 'base64');
+        
+        // Chunk it up into max 16KB chunks and send to the client
+        const chunkSize = 5 * 1024; // 5KB
+        let i = 0;
+        while (i < audioData.length) {
+          const end = Math.min(i + chunkSize, audioData.length);
+          const chunk = audioData.slice(i, end);
+          ws.send(chunk);
+          i += chunkSize;
+        }
+      } else if (message.isFinal) {
+        console.log('ElevenLabs streaming completed');
+        elevenLabsWs.close();
+      }
+    });
+
+    elevenLabsWs.on('error', (error) => {
+      console.error('ElevenLabs WebSocket error:', error);
+      reject(error);
+    });
+
+    elevenLabsWs.on('close', () => {
+      console.log('ElevenLabs WebSocket closed');
+    });
+  });
+}
 
 const setupDeepgram = (ws) => {
   let is_finals = [];
@@ -197,26 +208,26 @@ const setupDeepgram = (ws) => {
 };
 
 wss.on("connection", (ws) => {
-    console.log("WebSocket: Client connected");
-    let deepgram = setupDeepgram(ws);
+  console.log("WebSocket: Client connected");
+  let deepgram = setupDeepgram(ws);
 
-    ws.on("message", (message) => {
-        console.log("WebSocket: Client data received", typeof message, message.length, "bytes");
+  ws.on("message", (message) => {
+    console.log("WebSocket: Client data received", typeof message, message.length, "bytes");
 
-        if (deepgram.getReadyState() === 1) {
-            console.log("WebSocket: Data sent to Deepgram");
-            deepgram.send(message);
-        } else {
-            console.log("WebSocket: Data queued for Deepgram. Current state:", deepgram.getReadyState());
-            audioQueue.push(message);
-        }
-    });
+    if (deepgram.getReadyState() === 1) {
+      console.log("WebSocket: Data sent to Deepgram");
+      deepgram.send(message);
+    } else {
+      console.log("WebSocket: Data queued for Deepgram. Current state:", deepgram.getReadyState());
+      audioQueue.push(message);
+    }
+  });
 
-    ws.on("close", () => {
-        console.log("WebSocket: Client disconnected");
-        deepgram.removeAllListeners();
-        deepgram = null;
-    });
+  ws.on("close", () => {
+    console.log("WebSocket: Client disconnected");
+    deepgram.removeAllListeners();
+    deepgram = null;
+  });
 });
 
 const port = 8080;
