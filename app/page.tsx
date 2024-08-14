@@ -2,7 +2,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { SimliClient } from 'simli-client';
 
-const simli_faceid = '59da7c39-3de9-493b-b6e8-c53906f30ae0';
+// const simli_faceid = '59da7c39-3de9-493b-b6e8-c53906f30ae0';
+const simli_faceid = '647df045-c29e-47f2-858d-1b86bdd018fd';
 
 const Demo = () => {
   const [isLoading, setIsLoading] = useState(false);

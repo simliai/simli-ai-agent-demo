@@ -18,7 +18,8 @@ let keepAlive;
 const Groq = require('groq-sdk');
 const groq = new Groq(process.env.GROQ_API_KEY);
 
-const elevenlabs_voiceid = 'JlzYwOXWcqZ7RCVOjgKn';
+// const elevenlabs_voiceid = 'JlzYwOXWcqZ7RCVOjgKn';
+const elevenlabs_voiceid = 'kFsnovBBn69vNsybyS3T';
 
 console.log("Deepgram API key:", process.env.NEXT_PUBLIC_DEEPGRAM_API_KEY ? "Set" : "Not set");
 console.log("Groq API key:", process.env.GROQ_API_KEY ? "Set" : "Not set");
@@ -32,7 +33,8 @@ async function promptLLM(ws, prompt) {
       messages: [
         {
           role: 'assistant',
-          content: `You are Boromir from Lord of the rings, and someone from the real world is calling you to talk to you about something, you start each response with "One does not simply..." and you are edgy and humerous. Your responses are not too lengthy, not verbose.`
+          // content: `You are Boromir from Lord of the rings, and someone from the real world is calling you to talk to you about something, you start each response with "One does not simply..." and you are edgy and humerous. Your responses are not too lengthy, not verbose.`
+          content: `You are Einstein and you are talking to a student who is asking you about the theory of relativity.`
         },
         {
           role: 'user',
