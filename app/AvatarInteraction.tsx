@@ -3,6 +3,8 @@ import { SimliClient } from 'simli-client';
 
 interface AvatarInteractionProps {
   simli_faceid: string;
+  elevenlabs_voiceid: string;
+  initialPrompt: string;
   chatgptText: string;
   onChatGPTTextChange: (text: string) => void;
   audioStream: MediaStream | null;
@@ -10,6 +12,8 @@ interface AvatarInteractionProps {
 
 const AvatarInteraction: React.FC<AvatarInteractionProps> = ({ 
   simli_faceid, 
+  elevenlabs_voiceid,
+  initialPrompt,
   chatgptText,
   onChatGPTTextChange,
   audioStream
@@ -17,6 +21,7 @@ const AvatarInteraction: React.FC<AvatarInteractionProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [startWebRTC, setStartWebRTC] = useState(false);
+  const [connectionId, setConnectionId] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const socketRef = useRef<WebSocket | null>(null);
@@ -39,8 +44,37 @@ const AvatarInteraction: React.FC<AvatarInteractionProps> = ({
     }
   }, [simli_faceid]);
 
-  const initializeWebSocket = useCallback(() => {
-    socketRef.current = new WebSocket('ws://localhost:8080');
+  const startConversation = useCallback(async () => {
+    try {
+      const response = await fetch('http://localhost:8080/start-conversation', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          prompt: initialPrompt, 
+          voiceId: elevenlabs_voiceid 
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to start conversation');
+      }
+
+      const data = await response.json();
+      console.log(data.message);
+      setConnectionId(data.connectionId);
+
+      // After successful response, connect to WebSocket
+      initializeWebSocket(data.connectionId);
+    } catch (error) {
+      console.error('Error starting conversation:', error);
+      setError('Failed to start conversation. Please try again.');
+    }
+  }, [initialPrompt, elevenlabs_voiceid]);
+
+  const initializeWebSocket = useCallback((connectionId: string) => {
+    socketRef.current = new WebSocket(`ws://localhost:8080/ws?connectionId=${connectionId}`);
   
     socketRef.current.onopen = () => {
       console.log('Connected to server');
@@ -67,13 +101,12 @@ const AvatarInteraction: React.FC<AvatarInteractionProps> = ({
   
     socketRef.current.onerror = (error) => {
       console.error('WebSocket error:', error);
-      // setError('WebSocket connection error. Please check if the server is running.');
+      setError('WebSocket connection error. Please check if the server is running.');
     };
   }, [onChatGPTTextChange]);
 
   useEffect(() => {
     initializeSimliClient();
-    initializeWebSocket();
   
     return () => {
       if (socketRef.current) {
@@ -83,7 +116,7 @@ const AvatarInteraction: React.FC<AvatarInteractionProps> = ({
         simliClientRef.current.close();
       }
     };
-  }, [initializeSimliClient, initializeWebSocket]);
+  }, [initializeSimliClient]);
 
   useEffect(() => {
     if (textAreaRef.current) {
@@ -109,17 +142,28 @@ const AvatarInteraction: React.FC<AvatarInteractionProps> = ({
     }
   }, [audioStream]);
 
-  const handleStart = useCallback(() => {
-    console.log('Starting WebRTC');
-    simliClientRef.current?.start();
-    setStartWebRTC(true);
+  const handleStart = useCallback(async () => {
+    setIsLoading(true);
+    setError('');
 
-    setTimeout(() => {
-      const audioData = new Uint8Array(6000).fill(0);
-      simliClientRef.current?.sendAudioData(audioData);
-      console.log('Sent initial audio data');
-    }, 4000);
-  }, []);
+    try {
+      await startConversation();
+      console.log('Starting WebRTC');
+      simliClientRef.current?.start();
+      setStartWebRTC(true);
+
+      setTimeout(() => {
+        const audioData = new Uint8Array(6000).fill(0);
+        simliClientRef.current?.sendAudioData(audioData);
+        console.log('Sent initial audio data');
+      }, 4000);
+    } catch (error) {
+      console.error('Error starting conversation:', error);
+      setError('Failed to start conversation. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [startConversation]);
 
   return (
     <>
@@ -137,9 +181,10 @@ const AvatarInteraction: React.FC<AvatarInteractionProps> = ({
       ) : (
         <button
           onClick={handleStart}
-          className="w-full bg-white text-black py-2 px-4 hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-black"
+          disabled={isLoading}
+          className="w-full bg-white text-black py-2 px-4 hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-black disabled:bg-gray-400 disabled:cursor-not-allowed"
         >
-          Start WebRTC
+          {isLoading ? 'Starting...' : 'Start Conversation'}
         </button>
       )}
       {error && <p className="mt-4 text-red-500">{error}</p>}
