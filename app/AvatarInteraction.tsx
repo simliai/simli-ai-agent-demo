@@ -105,6 +105,52 @@ const AvatarInteraction: React.FC<AvatarInteractionProps> = ({
     };
   }, [onChatGPTTextChange]);
 
+  const isWebRTCConnected = useCallback(() => {
+    if (!simliClientRef.current) return false;
+    
+    // Access the private properties of SimliClient
+    // Note: This is not ideal and breaks encapsulation, but it avoids modifying SimliClient
+    const pc = (simliClientRef.current as any).pc as RTCPeerConnection | null;
+    const dc = (simliClientRef.current as any).dc as RTCDataChannel | null;
+    
+    return pc !== null && 
+           pc.iceConnectionState === 'connected' && 
+           dc !== null && 
+           dc.readyState === 'open';
+  }, []);
+
+  const handleStart = useCallback(async () => {
+    setIsLoading(true);
+    setError('');
+
+    try {
+      await startConversation();
+      console.log('Starting WebRTC');
+      simliClientRef.current?.start();
+      setStartWebRTC(true);
+
+      // Wait for the WebRTC connection to be established
+      const checkConnection = async () => {
+        if (isWebRTCConnected()) {
+          console.log('WebRTC connection established');
+          const audioData = new Uint8Array(6000).fill(0);
+          simliClientRef.current?.sendAudioData(audioData);
+          console.log('Sent initial audio data');
+        } else {
+          console.log('Waiting for WebRTC connection...');
+          setTimeout(checkConnection, 1000);  // Check again after 1 second
+        }
+      };
+
+      setTimeout(checkConnection, 4000);  // Start checking after 4 seconds
+    } catch (error) {
+      console.error('Error starting conversation:', error);
+      setError('Failed to start conversation. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [startConversation, isWebRTCConnected]);
+
   useEffect(() => {
     initializeSimliClient();
   
@@ -141,29 +187,6 @@ const AvatarInteraction: React.FC<AvatarInteractionProps> = ({
       };
     }
   }, [audioStream]);
-
-  const handleStart = useCallback(async () => {
-    setIsLoading(true);
-    setError('');
-
-    try {
-      await startConversation();
-      console.log('Starting WebRTC');
-      simliClientRef.current?.start();
-      setStartWebRTC(true);
-
-      setTimeout(() => {
-        const audioData = new Uint8Array(6000).fill(0);
-        simliClientRef.current?.sendAudioData(audioData);
-        console.log('Sent initial audio data');
-      }, 4000);
-    } catch (error) {
-      console.error('Error starting conversation:', error);
-      setError('Failed to start conversation. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [startConversation]);
 
   return (
     <>
