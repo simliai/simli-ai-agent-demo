@@ -1,18 +1,18 @@
-'use client';
-import React, { useState, useRef, use, useEffect } from 'react';
-import axios from 'axios';
-import { SimliClient } from 'simli-client';
+"use client";
+import React, { useState, useRef, use, useEffect } from "react";
+import axios from "axios";
+import { SimliClient } from "simli-client";
 
-const simli_faceid = '5514e24d-6086-46a3-ace4-6a7264e5cb7c';
-const elevenlabs_voiceid = 'onwK4e9ZLuTAKqWW03F9';
+const simli_faceid = "5514e24d-6086-46a3-ace4-6a7264e5cb7c";
+const elevenlabs_voiceid = "onwK4e9ZLuTAKqWW03F9";
 
 const simliClient = new SimliClient();
 
 const Demo = () => {
-  const [inputText, setInputText] = useState('');
+  const [inputText, setInputText] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [chatgptText, setChatgptText] = useState('');
+  const [error, setError] = useState("");
+  const [chatgptText, setChatgptText] = useState("");
   const [startWebRTC, setStartWebRTC] = useState(false);
   const audioContext = useRef<AudioContext | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -20,7 +20,6 @@ const Demo = () => {
 
   useEffect(() => {
     if (videoRef.current && audioRef.current) {
-
       // Step 0: Initialize Simli Client
       const SimliConfig = {
         apiKey: process.env.NEXT_PUBLIC_SIMLI_API_KEY,
@@ -32,26 +31,43 @@ const Demo = () => {
 
       simliClient.Initialize(SimliConfig);
 
-      console.log('Simli Client initialized');
-    };
+      console.log("Simli Client initialized");
+    }
 
     return () => {
       simliClient.close();
     };
-  },[videoRef, audioRef]);
+  }, [videoRef, audioRef]);
+
+  useEffect(() => {
+    simliClient.on("connected", () => {
+      setIsLoading(false);
+      console.log("SimliClient is now connected!");
+    });
+
+    simliClient.on("disconnected", () => {
+      console.log("SimliClient has disconnected!");
+    });
+
+    simliClient.on("failed", () => {
+      console.log("SimliClient has failed to connect!");
+    });
+  }, []);
 
   const handleStart = () => {
     // Step 1: Start WebRTC
     simliClient.start();
     setStartWebRTC(true);
+    setIsLoading(true);
 
     setTimeout(() => {
       // Step 2: Send empty audio data to WebRTC to start rendering
       const audioData = new Uint8Array(6000).fill(0);
       simliClient.sendAudioData(audioData);
     }, 4000);
-    
-    audioContext.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+
+    audioContext.current = new (window.AudioContext ||
+      (window as any).webkitAudioContext)();
     return () => {
       if (audioContext.current) {
         audioContext.current.close();
@@ -61,22 +77,22 @@ const Demo = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setInputText('');
+    setInputText("");
     setIsLoading(true);
-    setError('');
+    setError("");
 
     try {
       // Step 3: Send text to OpenAI ChatGPT
       const chatGPTResponse = await axios.post(
-        'https://api.openai.com/v1/chat/completions',
+        "https://api.openai.com/v1/chat/completions",
         {
-          model: 'gpt-3.5-turbo',
-          messages: [{ role: 'user', content: inputText }],
+          model: "gpt-3.5-turbo",
+          messages: [{ role: "user", content: inputText }],
         },
         {
           headers: {
-            'Authorization': `Bearer ${process.env.NEXT_PUBLIC_OPENAI_API_KEY}`,
-            'Content-Type': 'application/json',
+            Authorization: `Bearer ${process.env.NEXT_PUBLIC_OPENAI_API_KEY}`,
+            "Content-Type": "application/json",
           },
         }
       );
@@ -89,14 +105,14 @@ const Demo = () => {
         `https://api.elevenlabs.io/v1/text-to-speech/${elevenlabs_voiceid}?output_format=pcm_16000`,
         {
           text: chatGPTText,
-          model_id: 'eleven_multilingual_v1'
+          model_id: "eleven_multilingual_v1",
         },
         {
           headers: {
-            'xi-api-key': `${process.env.NEXT_PUBLIC_ELEVENLABS_API_KEY}`,
-            'Content-Type': 'application/json',
+            "xi-api-key": `${process.env.NEXT_PUBLIC_ELEVENLABS_API_KEY}`,
+            "Content-Type": "application/json",
           },
-          responseType: 'arraybuffer',
+          responseType: "arraybuffer",
         }
       );
 
@@ -111,7 +127,7 @@ const Demo = () => {
         simliClient.sendAudioData(chunk);
       }
     } catch (err) {
-      setError('An error occurred. Please try again.');
+      setError("An error occurred. Please try again.");
       console.error(err);
     } finally {
       setIsLoading(false);
@@ -123,8 +139,14 @@ const Demo = () => {
       <div className="w-[512px] h-svh flex flex-col justify-center items-center gap-4">
         {/* Simli Client Renderer */}
         <div className="relative w-full aspect-video">
-          <video ref={videoRef} id="simli_video" autoPlay playsInline className="w-full h-full object-cover"></video>
-          <audio ref={audioRef} id="simli_audio" autoPlay ></audio>
+          <video
+            ref={videoRef}
+            id="simli_video"
+            autoPlay
+            playsInline
+            className="w-full h-full object-cover"
+          ></video>
+          <audio ref={audioRef} id="simli_audio" autoPlay></audio>
         </div>
         {startWebRTC ? (
           <>
@@ -142,7 +164,7 @@ const Demo = () => {
                 disabled={isLoading}
                 className="w-full bg-white text-black py-2 px-4 hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-black disabled:opacity-50"
               >
-                {isLoading ? 'Processing...' : 'Send'}
+                {isLoading ? "Processing..." : "Send"}
               </button>
             </form>
           </>
@@ -151,7 +173,7 @@ const Demo = () => {
             onClick={handleStart}
             className="w-full bg-white text-black py-2 px-4 hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-black"
           >
-            Start WebRTC
+            Start
           </button>
         )}
         {error && <p className="mt-4 text-red-500">{error}</p>}
