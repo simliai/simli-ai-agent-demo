@@ -81,6 +81,14 @@ const Demo = () => {
     setIsLoading(true);
     setError("");
 
+    // Add API key validation
+    const openaiApiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY;
+    if (!openaiApiKey) {
+      setError("OpenAI API key is not configured");
+      setIsLoading(false);
+      return;
+    }
+
     try {
       // Step 3: Send text to OpenAI ChatGPT
       const chatGPTResponse = await axios.post(
@@ -91,7 +99,7 @@ const Demo = () => {
         },
         {
           headers: {
-            Authorization: `Bearer ${process.env.NEXT_PUBLIC_OPENAI_API_KEY}`,
+            Authorization: `Bearer ${openaiApiKey}`, // Use validated API key
             "Content-Type": "application/json",
           },
         }
